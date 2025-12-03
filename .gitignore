@@ -1,0 +1,8 @@
+# Python 
+__pycache__/
+
+dataset
+dataset/
+checkpoints/
+
+_test.ipynb

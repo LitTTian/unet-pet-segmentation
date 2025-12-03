@@ -27,14 +27,14 @@ def unique_mask_values(mask_file): # 获取mask中所有的类别
     return np.unique(mask)
 
 class OxfordPetDataset(Dataset):
-    def __init__(self, image_dir, mask_dir, file_txt, img_size=256, train=True, dataset_analyse=False):
+    def __init__(self, image_dir, mask_dir, file_txt, img_size=256, train=True, dataset_analyse=False, n_samples=0):
         # self.images = images
         # self.masks = masks
         self.image_dir = image_dir
         self.mask_dir = mask_dir
         self.img_size = img_size
         self.train = train
-        self.file_dict = self._load_file_dict(file_txt)
+        self.file_dict = self._load_file_dict(file_txt, n_samples)
         self.image_transform, self.mask_transform = self._get_transforms()
         if dataset_analyse:
             self.dataset_analyse()
@@ -42,13 +42,15 @@ class OxfordPetDataset(Dataset):
     def __len__(self):
         return len(self.file_dict)
     
-    def _load_file_dict(self, file_txt):
+    def _load_file_dict(self, file_txt, n_samples=0):
         df = pd.read_csv(
             file_txt,
             sep=" ",
             names=["image_name", "class_id", "species", "breed_id"],
             dtype={"image_name": str, "class_id": int, "species": int, "breed_id": int},
         )
+        if n_samples > 0:
+            df = df.sample(n=n_samples, random_state=42).reset_index(drop=True)
         return df.to_dict(orient="records")
 
     def _get_transforms(self):

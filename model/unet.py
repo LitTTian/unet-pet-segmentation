@@ -7,10 +7,10 @@ class DoubleConv(nn.Module):
         super().__init__()
         mid_channels = mid_channels or out_channels
         self.double_conv = nn.Sequential(
-            nn.Conv2d(in_channels, mid_channels, kernel_size=3),
+            nn.Conv2d(in_channels, mid_channels, kernel_size=3, padding=1),
             nn.BatchNorm2d(mid_channels),
             nn.ReLU(inplace=True),
-            nn.Conv2d(mid_channels, out_channels, kernel_size=3),
+            nn.Conv2d(mid_channels, out_channels, kernel_size=3, padding=1),
             nn.BatchNorm2d(out_channels),
             nn.ReLU(inplace=True)
         )
@@ -47,6 +47,7 @@ class Up(nn.Module):
 class OutConv(nn.Module):
     def __init__(self, in_channels, out_channels):
         super(OutConv, self).__init__()
+        # self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=1)
         self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=1)
     def forward(self, x):
         return self.conv(x)
@@ -78,3 +79,11 @@ class UNet(nn.Module):
         x = self.up4(x, x1)
         logits = self.outc(x)
         return logits
+    
+# class UnetWithOverlapTile:
+#     def __init__(self, model: nn.Module, tile_size: tuple[int, int] = (128, 128), overlap: float = 0.25, device: str='cpu'):
+#         self.model = model.to(device)
+#         self.tile_size = tile_size
+#         self.overlap = overlap
+#         self.device = device
+#         self.model.eval()  # 推理模式

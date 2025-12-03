@@ -3,6 +3,8 @@ __pycache__/
 
 dataset
 dataset/
+checkpoints
 checkpoints/
+logs/
 
 _test.ipynb

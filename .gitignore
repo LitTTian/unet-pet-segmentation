@@ -6,5 +6,6 @@ dataset/
 checkpoints
 checkpoints/
 logs/
+wandb/
 
 _test.ipynb

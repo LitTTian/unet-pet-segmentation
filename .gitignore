@@ -9,3 +9,10 @@ logs/
 wandb/
 
 _test.ipynb
+_test_model.ipynb
+
+# 配置文件
+.env
+
+# 系统文件
+.DS_Store

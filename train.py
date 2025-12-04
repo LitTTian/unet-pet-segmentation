@@ -4,6 +4,7 @@ from torch.utils.data import DataLoader, random_split
 from utils.dataset import OxfordPetDataset
 from model.unet import UNet
 from model.transunet import TransUnet
+from model.transunetP import TransUnetP
 from trainer import train_one_epoch, validate
 import torch.nn as nn
 import torch.optim as optim
@@ -19,7 +20,7 @@ import argparse  # 新增：命令行参数解析
 warnings.filterwarnings('ignore')
 
 # ===================== 基础配置 =====================
-WANDB_PROJECT = "oxford-pet-segmentation-unet"
+WANDB_PROJECT = "oxford-pet-segmentation-lr1e-4bs16"
 WANDB_ENTITY = None
 WANDB_NAME = None
 
@@ -70,10 +71,10 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Oxford Pet Segmentation Training (UNet/TransUNet)')
     
     # 基础训练参数
-    parser.add_argument('--batch-size', type=int, default=24, help='Batch size (default: 24)')
-    parser.add_argument('--lr', '--learning-rate', type=float, default=1e-2, dest='learning_rate',
-                        help='Initial learning rate (default: 1e-2)')
-    parser.add_argument('--img-size', type=int, default=256, help='Input image size (default: 256)')
+    parser.add_argument('--batch-size', type=int, default=16, help='Batch size (default: 16)')
+    parser.add_argument('--lr', '--learning-rate', type=float, default=1e-4, dest='learning_rate',
+                        help='Initial learning rate (default: 1e-4)')
+    parser.add_argument('--img-size', type=int, nargs=2, default=(256, 256), help='Input image size (default: 256 256)')
     parser.add_argument('--train-val-split', type=float, default=0.8,
                         help='Train/validation split ratio (default: 0.8)')
     parser.add_argument('--epochs', type=int, default=200, help='Total training epochs (default: 200)')
@@ -84,8 +85,8 @@ def parse_args():
                         help='Number of data loader workers (default: 1)')
     
     # 模型选择与参数
-    parser.add_argument('--model', type=str, default='unet', choices=['unet', 'transunet'],
-                        help='Model type (unet/transunet, default: unet)')
+    parser.add_argument('--model', type=str, default='unet', choices=['unet', 'transunet', 'transunetp'],
+                        help='Model type (unet/transunet/transunetp, default: unet)')
     parser.add_argument('--transunet-num-heads', type=int, default=12,
                         help='TransUNet number of attention heads (default: 12)')
     parser.add_argument('--transunet-num-layers', type=int, default=12,
@@ -106,7 +107,7 @@ def parse_args():
                         help='Weight decay (L2 regularization, default: 1e-5)')
     
     # 训练策略
-    parser.add_argument('--patience', type=int, default=20,
+    parser.add_argument('--patience', type=int, default=999,
                         help='Early stopping patience (default: 20)')
     parser.add_argument('--gradient-clip-norm', type=float, default=1.0,
                         help='Gradient clip norm (0 to disable, default: 1.0)')
@@ -193,7 +194,8 @@ def main(args):
     # 动态生成检查点目录
     CHECKPOINT_DIRS = {
         'unet': f'./checkpoints/unet_{RUN_ID}/',
-        'transunet': f'./checkpoints/transunet_{RUN_ID}/'
+        'transunet': f'./checkpoints/transunet_{RUN_ID}/',
+        'transunetp': f'./checkpoints/transunetp_{RUN_ID}/',
     }
     CHECKPOINT_DIR = CHECKPOINT_DIRS[CONFIG['model']]
     
@@ -251,6 +253,7 @@ def main(args):
         train_dataset,
         batch_size=CONFIG['batch_size'],
         shuffle=True,
+        generator=torch.Generator().manual_seed(CONFIG['seed']),  # NT: 确保每个epoch数据顺序相同
         num_workers=CONFIG['num_workers'],
         pin_memory=True,
         drop_last=True  # 避免最后一个批次样本数不足
@@ -288,8 +291,19 @@ def main(args):
     try:
         if CONFIG["model"] == "unet":
             model = UNet(n_channels=3, n_classes=1).to(device)
-        else:  # transunet
+        elif CONFIG["model"] == "transunet":
             model = TransUnet(
+                img_size=CONFIG["img_size"],
+                n_channels=3,
+                n_classes=1,
+                num_heads=CONFIG["transunet_num_heads"],
+                num_layers=CONFIG["transunet_num_layers"],
+                mlp_dim=CONFIG["transunet_mlp_dim"],
+                dropout_rate=CONFIG["transunet_dropout_rate"],
+                embed_dim=CONFIG["transunet_embed_dim"],
+            ).to(device)
+        elif CONFIG["model"] == "transunetp":
+            model = TransUnetP(
                 img_size=CONFIG["img_size"],
                 n_channels=3,
                 n_classes=1,

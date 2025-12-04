@@ -27,7 +27,7 @@ def unique_mask_values(mask_file): # 获取mask中所有的类别
     return np.unique(mask)
 
 class OxfordPetDataset(Dataset):
-    def __init__(self, image_dir, mask_dir, file_txt, img_size=256, train=True, dataset_analyse=False, n_samples=0):
+    def __init__(self, image_dir, mask_dir, file_txt, img_size=(256, 256), train=True, dataset_analyse=False, n_samples=0):
         # self.images = images
         # self.masks = masks
         self.image_dir = image_dir
@@ -55,12 +55,12 @@ class OxfordPetDataset(Dataset):
 
     def _get_transforms(self):
         image_base = [
-            transforms.Resize((self.img_size, self.img_size)),
+            transforms.Resize(self.img_size),
             transforms.ToTensor(),
             transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD),
         ]
         mask_base = [
-            transforms.Resize((self.img_size, self.img_size)),
+            transforms.Resize(self.img_size),
             transforms.ToTensor(),
         ]
         image_transform = transforms.Compose(image_base)

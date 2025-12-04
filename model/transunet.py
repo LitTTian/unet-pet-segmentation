@@ -109,13 +109,13 @@ class TransUnet(nn.Module):
     def __init__(self, 
                  n_channels, 
                  n_classes, 
-                 embed_dim=128,
+                 embed_dim=768,
                  img_size=(256, 256),
                 #  feature_size=64,
-                 num_heads=8,
-                 num_layers=4,
+                 num_heads=12,
+                 num_layers=12,
                 #  hidden_dim=256,
-                 mlp_dim=512,
+                 mlp_dim=3072,
                  dropout_rate=0.1,
                 #  attention_dropout_rate=0.1
                  ):

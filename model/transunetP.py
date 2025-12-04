@@ -134,8 +134,8 @@ class TransUnetP(nn.Module):
             n_channels, 
             n_classes, 
             embed_dim=768,
-            num_heads=8,
-            num_layers=4,
+            num_heads=12,
+            num_layers=12,
             mlp_dim=3072,
             dropout_rate=0.1,
             img_size=(256, 256)

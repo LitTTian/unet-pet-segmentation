@@ -107,12 +107,12 @@ def parse_args():
                         help='Weight decay (L2 regularization, default: 1e-5)')
     
     # 训练策略
-    parser.add_argument('--patience', type=int, default=999,
+    parser.add_argument('--patience', type=int, default=20,
                         help='Early stopping patience (default: 20)')
     parser.add_argument('--gradient-clip-norm', type=float, default=1.0,
                         help='Gradient clip norm (0 to disable, default: 1.0)')
-    parser.add_argument('--checkpoint-save-freq', type=int, default=1,
-                        help='Checkpoint save frequency (epochs, default: 1)')
+    parser.add_argument('--checkpoint-save-freq', type=int, default=10,
+                        help='Checkpoint save frequency (epochs, default: 10)')
     parser.add_argument('--save-all-checkpoints', action='store_true', default=True,
                         help='Save all checkpoints (default: True)')
     parser.add_argument('--no-save-all-checkpoints', action='store_false', dest='save_all_checkpoints',

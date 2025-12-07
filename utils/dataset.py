@@ -6,6 +6,8 @@ import pandas as pd
 import numpy as np
 from torchvision import transforms
 from torchvision.transforms import functional as F
+from torchvision.transforms import InterpolationMode
+from .tools import tensor2image
 import random
 import logging
 from multiprocessing import Pool
@@ -14,28 +16,30 @@ from tqdm import tqdm
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD = [0.229, 0.224, 0.225]
 
-def denormalize(tensor, mean=IMAGENET_MEAN, std=IMAGENET_STD):
+def denormalize(tensor, mean=IMAGENET_MEAN, std=IMAGENET_STD, returnImage=False, device='cpu'):
     tensor = tensor.clone()
     for t, m, s in zip(tensor, mean, std):
         t.mul_(s).add_(m)
-    img_np = tensor.cpu().numpy().transpose(1, 2, 0)
-    img_np = np.clip(img_np * 255, 0, 255).astype(np.uint8)
-    return img_np
+    # img_np = tensor.cpu().numpy().transpose(1, 2, 0)
+    # img_np = np.clip(img_np * 255, 0, 255).astype(np.uint8)
+    if returnImage:
+        return tensor2image(tensor)
+    return tensor.to(device)
+
 
 def unique_mask_values(mask_file): # 获取mask中所有的类别
     mask = np.asarray(Image.open(mask_file))
     return np.unique(mask)
 
 class OxfordPetDataset(Dataset):
-    def __init__(self, image_dir, mask_dir, file_txt, img_size=(256, 256), train=True, dataset_analyse=False, n_samples=0):
-        # self.images = images
-        # self.masks = masks
+    def __init__(self, image_dir, mask_dir, file_txt, img_size=(256, 256), resized_size=320,
+    train=True, dataset_analyse=False, n_samples=0):
         self.image_dir = image_dir
         self.mask_dir = mask_dir
         self.img_size = img_size
+        self.resized_size = resized_size
         self.train = train
         self.file_dict = self._load_file_dict(file_txt, n_samples)
-        self.image_transform, self.mask_transform = self._get_transforms()
         if dataset_analyse:
             self.dataset_analyse()
 
@@ -52,30 +56,35 @@ class OxfordPetDataset(Dataset):
         if n_samples > 0:
             df = df.sample(n=n_samples, random_state=42).reset_index(drop=True)
         return df.to_dict(orient="records")
-
-    def _get_transforms(self):
-        image_base = [
-            transforms.Resize(self.img_size),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD),
-        ]
-        mask_base = [
-            transforms.Resize(self.img_size),
-            transforms.ToTensor(),
-        ]
-        image_transform = transforms.Compose(image_base)
-        mask_transform = transforms.Compose(mask_base)
-        return image_transform, mask_transform
     
     def _apply_sync_transforms(self, image, mask):  # Train时使用几何变换
-        i, j, h, w = transforms.RandomResizedCrop.get_params(
-            image, scale=(0.8, 1.0), ratio=(0.9, 1.1)
-        )
-        image = F.crop(image, i, j, h, w)
-        mask = F.crop(mask, i, j, h, w)
-        if random.random() > 0.5:
-            image = F.hflip(image)
-            mask = F.hflip(mask)
+        # 无拉伸Resize + RandomCrop + RandomHorizontalFlip
+        # print("before resize:", image.shape, mask.shape)
+        image = F.resize( image, size=self.resized_size, interpolation=InterpolationMode.BILINEAR, antialias=True)
+        mask = F.resize( mask, size=self.resized_size, interpolation=InterpolationMode.NEAREST, antialias=False)
+        # print("after resize:", image.shape, mask.shape)
+        if self.train:
+            h, w = self.img_size
+            i, j = random.randint(0, image.shape[1] - h), random.randint(0, image.shape[2] - w)
+            image = F.crop(image, i, j, h, w)
+            mask = F.crop(mask, i, j, h, w)
+            if random.random() > 0.5:
+                image = F.hflip(image)
+                mask = F.hflip(mask)
+        else:  # 测试或者验证时使用中心裁剪
+            # 保证图像是16的倍数
+            if image.shape[1] != mask.shape[1] or image.shape[2] != mask.shape[2]:
+                # print("val尺寸不一致", image.shape, mask.shape)
+                raise ValueError("Image and mask must have the same dimensions for cropping.")
+            _, h_resized, w_resized = image.shape
+            h_final = (h_resized // 16) * 16
+            w_final = (w_resized // 16) * 16
+            i = (h_resized - h_final) // 2
+            j = (w_resized - w_final) // 2
+            image = F.crop(image, i, j, h_final, w_final)
+            mask = F.crop(mask, i, j, h_final, w_final)
+        # print("mode: ", self.train, "after crop:", image.shape, mask.shape)
+        image = F.normalize(image, mean=IMAGENET_MEAN, std=IMAGENET_STD)
         return image, mask
     
     def __getitem__(self, idx):
@@ -84,10 +93,7 @@ class OxfordPetDataset(Dataset):
         image = Image.open(img_path).convert("RGB")
         mask = Image.open(mask_path).convert("L")
 
-        if self.train:
-            image, mask = self._apply_sync_transforms(image, mask)  # 确保image和mask做相同的几何变换
-        image = self.image_transform(image)
-        mask = self.mask_transform(mask)
+        image, mask = self._apply_sync_transforms(F.to_tensor(image), F.to_tensor(mask))
         mask = torch.squeeze(mask)
         mask = torch.where((mask == 1/255), 1.0, 0.0)
         mask = mask.to(torch.float32)

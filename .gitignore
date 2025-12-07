@@ -10,6 +10,7 @@ wandb/
 
 _test.ipynb
 _test_model.ipynb
+_test/
 
 # 配置文件
 .env

@@ -17,10 +17,12 @@ import wandb
 from datetime import datetime
 import warnings
 import argparse  # 新增：命令行参数解析
+from dotenv import load_dotenv
+load_dotenv()
 warnings.filterwarnings('ignore')
 
 # ===================== 基础配置 =====================
-WANDB_PROJECT = "oxford-pet-segmentation-lr1e-4bs16"
+WANDB_PROJECT = "oxford-pet-segmentation-unet-resize"
 WANDB_ENTITY = None
 WANDB_NAME = None
 
@@ -107,11 +109,11 @@ def parse_args():
                         help='Weight decay (L2 regularization, default: 1e-5)')
     
     # 训练策略
-    parser.add_argument('--patience', type=int, default=20,
+    parser.add_argument('--patience', type=int, default=999,
                         help='Early stopping patience (default: 20)')
     parser.add_argument('--gradient-clip-norm', type=float, default=1.0,
                         help='Gradient clip norm (0 to disable, default: 1.0)')
-    parser.add_argument('--checkpoint-save-freq', type=int, default=10,
+    parser.add_argument('--checkpoint-save-freq', type=int, default=1,
                         help='Checkpoint save frequency (epochs, default: 10)')
     parser.add_argument('--save-all-checkpoints', action='store_true', default=True,
                         help='Save all checkpoints (default: True)')
@@ -127,15 +129,27 @@ def parse_args():
                         help='WandB run name (default: auto-generated)')
     
     # 路径配置（可选，覆盖默认路径）
-    parser.add_argument('--image-dir', type=str, default='C:\\Users\\Alvis\\Study\\datasets\\image\\Oxford-IIIT_Pet_Dataset\\images\\',
+    # parser.add_argument('--image-dir', type=str, default='C:\\Users\\Alvis\\Study\\datasets\\image\\Oxford-IIIT_Pet_Dataset\\images\\',
+    #                     help='Path to images directory')
+    # parser.add_argument('--mask-dir', type=str, default='C:\\Users\\Alvis\\Study\\datasets\\image\\Oxford-IIIT_Pet_Dataset\\annotations\\trimaps\\',
+    #                     help='Path to masks directory')
+    # parser.add_argument('--train-val-txt', type=str, default='C:\\Users\\Alvis\\Study\\datasets\\image\\Oxford-IIIT_Pet_Dataset\\annotations\\trainval.txt',
+    #                     help='Path to trainval.txt')
+    # parser.add_argument('--test-txt', type=str, default='C:\\Users\\Alvis\\Study\\datasets\\image\\Oxford-IIIT_Pet_Dataset\\annotations\\test.txt',
+    #                     help='Path to test.txt')
+    parser.add_argument('--image-dir', type=str, default=os.getenv('IMAGE_DIR', 'datasets/images/'),
                         help='Path to images directory')
-    parser.add_argument('--mask-dir', type=str, default='C:\\Users\\Alvis\\Study\\datasets\\image\\Oxford-IIIT_Pet_Dataset\\annotations\\trimaps\\',
+    parser.add_argument('--mask-dir', type=str, default=os.getenv('MASK_DIR', 'datasets/masks/'),
                         help='Path to masks directory')
-    parser.add_argument('--train-val-txt', type=str, default='C:\\Users\\Alvis\\Study\\datasets\\image\\Oxford-IIIT_Pet_Dataset\\annotations\\trainval.txt',
+    parser.add_argument('--train-val-txt', type=str, default=os.getenv('TRAINVAL_TXT_PATH', 'datasets/trainval.txt'),
                         help='Path to trainval.txt')
-    parser.add_argument('--test-txt', type=str, default='C:\\Users\\Alvis\\Study\\datasets\\image\\Oxford-IIIT_Pet_Dataset\\annotations\\test.txt',
+    parser.add_argument('--test-txt', type=str, default=os.getenv('TEST_TXT_PATH', 'datasets/test.txt'),
                         help='Path to test.txt')
-    
+    parser.add_argument('--ckpt-dir', type=str, default=os.getenv('CKPT_PATH', 'checkpoints/'),
+                        help='Path to checkpoints directory')
+    parser.add_argument('--task-name', type=str, default=os.getenv('TASK_NAME', 'oxford-pet-segmentation'),
+                        help='Task name for logging and checkpoints')
+
     return parser.parse_args()
 
 # ===================== 主训练函数 =====================
@@ -165,6 +179,8 @@ def main(args):
         "patience": args.patience,
         "gradient_clip_norm": args.gradient_clip_norm,
         "checkpoint_save_freq": args.checkpoint_save_freq,
+        "ckpt_dir": args.ckpt_dir,
+        "task_name": args.task_name,
     }
     
     # 初始化日志
@@ -183,7 +199,7 @@ def main(args):
     
     # 初始化wandb
     wandb.init(
-        project=WANDB_PROJECT,
+        project=CONFIG["task_name"] or WANDB_PROJECT,
         entity=WANDB_ENTITY,
         name=args.wandb_name or f"{CONFIG['model']}_{RUN_ID}",
         config=CONFIG,
@@ -193,9 +209,9 @@ def main(args):
     
     # 动态生成检查点目录
     CHECKPOINT_DIRS = {
-        'unet': f'./checkpoints/unet_{RUN_ID}/',
-        'transunet': f'./checkpoints/transunet_{RUN_ID}/',
-        'transunetp': f'./checkpoints/transunetp_{RUN_ID}/',
+        'unet': f'{CONFIG["ckpt_dir"]}/unet_{CONFIG["task_name"]}_{RUN_ID}/',
+        'transunet': f'{CONFIG["ckpt_dir"]}/transunet_{CONFIG["task_name"]}_{RUN_ID}/',
+        'transunetp': f'{CONFIG["ckpt_dir"]}/transunetp_{CONFIG["task_name"]}_{RUN_ID}/',
     }
     CHECKPOINT_DIR = CHECKPOINT_DIRS[CONFIG['model']]
     
@@ -246,7 +262,7 @@ def main(args):
     )
     
     # 设置验证集为非训练模式
-    val_dataset.dataset.train = False
+    val_dataset.dataset.train = True
     
     # 创建数据加载器
     train_loader = DataLoader(
@@ -261,9 +277,9 @@ def main(args):
     
     val_loader = DataLoader(
         val_dataset,
-        batch_size=CONFIG['batch_size'],
+        batch_size=1,
         shuffle=False,
-        num_workers=CONFIG['num_workers'],
+        num_workers=0,
         pin_memory=True
     )
     
@@ -280,9 +296,9 @@ def main(args):
         )
         test_loader = DataLoader(
             test_dataset,
-            batch_size=CONFIG['batch_size'],
+            batch_size=1,  # 测试集大小不一致,没法多batch
             shuffle=False,
-            num_workers=CONFIG['num_workers'],
+            num_workers=0,
             pin_memory=True
         )
     
@@ -390,6 +406,7 @@ def main(args):
     test_losses = []
     test_ious = []
     test_dices = []
+    learning_rates = []
     no_improvement_count = 0
     
     for epoch in range(CONFIG['epochs']):
@@ -468,13 +485,14 @@ def main(args):
         wandb.log(log_data)
         
         # ===================== 更新CSV日志 =====================
+        learning_rates.append(optimizer.param_groups[0]['lr'])
         loss_df = pd.DataFrame({
             'epoch': list(range(1, len(train_losses)+1)),
             'train_loss': train_losses,
             'val_loss': val_losses,
             'val_iou': val_ious,
             'val_dice': val_dices,
-            'learning_rate': [optimizer.param_groups[0]['lr']] * len(train_losses)
+            'learning_rate': learning_rates
         })
         
         if test_losses:

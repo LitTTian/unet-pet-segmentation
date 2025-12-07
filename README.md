@@ -160,6 +160,11 @@ python train.py --model unet --batch-size 24 --lr 1e-4
 | TransUnetP |   81.537%    |  89.140% | 80.475% | 88.325% | 71 | 46.0 |
 | TransUnet16 | <b>82.855%</b> | <b>90.032%</b> | <b>81.617%</b> | <b>89.136%</b> | 52 | 47.6 |
 
+- 发现数据集加载的过程中使用不等比例的缩放会降低模型的鲁棒性,也导致训练不稳定.新的数据加载过程已经更新.
+<div style="background-color:white; margin:auto; text-align:center;">
+    <image src="./assets/model_test_unet.png"/>
+    <span style="fontcolor:gray; font-size:small;">图. 修复数据加载类之后的Unet训练更加稳定</span>
+</div>
 
 ## 项目结构
 
